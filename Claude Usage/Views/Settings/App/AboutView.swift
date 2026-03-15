@@ -41,9 +41,11 @@ struct AboutView: View {
                             .font(DesignTokens.Typography.caption)
                             .foregroundColor(.secondary)
 
-                        // Check for Updates button
+                        // Check for Updates — opens GitHub releases page
                         Button(action: {
-                            UpdateManager.shared.checkForUpdates()
+                            if let url = URL(string: "https://github.com/hamed-elfayome/Claude-Usage-Tracker/releases") {
+                                NSWorkspace.shared.open(url)
+                            }
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.down.circle")

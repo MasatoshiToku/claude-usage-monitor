@@ -116,28 +116,6 @@ class ProfileManager: ObservableObject {
     /// Profile count is fixed at 3. Profiles cannot be deleted.
     func deleteProfile(_ id: UUID) throws {
         throw ProfileError.cannotDeleteFixedProfile
-
-        let profileName = profiles.first(where: { $0.id == id })?.name ?? "unknown"
-
-        // Clean up usage history for this profile
-        UsageHistoryService.shared.deleteHistory(for: id)
-        LoggingService.shared.log("Successfully deleted usage history for profile: \(profileName)")
-
-        profiles.removeAll { $0.id == id }
-
-        // Credentials are deleted automatically with the profile
-
-        // Switch to first profile if deleted active
-        if activeProfile?.id == id {
-            if let first = profiles.first {
-                Task {
-                    await activateProfile(first.id)
-                }
-            }
-        }
-
-        profileStore.saveProfiles(profiles)
-        LoggingService.shared.log("Deleted profile: \(profileName)")
     }
 
     func toggleProfileSelection(_ id: UUID) {

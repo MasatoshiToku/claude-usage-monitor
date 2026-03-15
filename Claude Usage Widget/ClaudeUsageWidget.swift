@@ -150,7 +150,7 @@ struct SmallWidgetView: View {
     let accounts: [AccountData]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             // Title with Claude orange color
             HStack(spacing: 3) {
                 Image(systemName: "bolt.fill")
@@ -166,28 +166,41 @@ struct SmallWidgetView: View {
                 if account.isConfigured {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 4) {
-                            // Status dot next to account name
-                            StatusDot(color: colorForPercent(account.sessionPercent))
+                            // Status dot based on higher usage level
+                            StatusDot(color: colorForPercent(max(account.sessionPercent, account.weeklyPercent)))
                             Text(account.name)
                                 .font(.caption2)
                                 .lineLimit(1)
                             Spacer()
-                            // Percentage text colored by usage level
+                            // Session and weekly percentages side by side
+                            Text("S:")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
                             Text("\(Int(account.sessionPercent * 100))%")
-                                .font(.caption2)
-                                .fontWeight(.bold)
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(colorForPercent(account.sessionPercent))
+                            Text("W:")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                            Text("\(Int(account.weeklyPercent * 100))%")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(colorForPercent(account.weeklyPercent))
                         }
-                        // Progress bar fill color uses colorForPercent
+                        // Session progress bar
                         ProgressView(value: account.sessionPercent)
                             .tint(colorForPercent(account.sessionPercent))
+                            .scaleEffect(y: 0.8)
+                        // Weekly progress bar
+                        ProgressView(value: account.weeklyPercent)
+                            .tint(colorForPercent(account.weeklyPercent))
+                            .scaleEffect(y: 0.8)
                     }
-                    // Subtle background tint based on usage level
+                    // Subtle background tint based on higher usage level
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(backgroundTintForPercent(account.sessionPercent))
+                            .fill(backgroundTintForPercent(max(account.sessionPercent, account.weeklyPercent)))
                     )
                 } else {
                     // Unconfigured accounts shown in gray
@@ -257,15 +270,15 @@ struct MediumWidgetView: View {
                                 Text("\(Int(account.sessionPercent * 100))%")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(colorForPercent(account.sessionPercent))
-                                Text("ses")
+                                Text("Session")
                                     .font(.system(size: 7))
                                     .foregroundStyle(.secondary)
                             }
                         }
                         .frame(width: 50, height: 50)
 
-                        // Weekly percentage colored by usage level
-                        Text("W: \(Int(account.weeklyPercent * 100))%")
+                        // Weekly percentage with clear label
+                        Text("Week: \(Int(account.weeklyPercent * 100))%")
                             .font(.system(size: 9))
                             .foregroundStyle(colorForPercent(account.weeklyPercent))
                     }
@@ -312,6 +325,175 @@ struct MediumWidgetView: View {
     }
 }
 
+// MARK: - Large Widget View
+
+struct LargeWidgetView: View {
+    let accounts: [AccountData]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack(spacing: 5) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(claudeOrange)
+                Text("Claude Usage Monitor")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(claudeOrange)
+                Spacer()
+                // Legend
+                HStack(spacing: 8) {
+                    LegendItem(label: "Session", symbol: "circle.fill")
+                    LegendItem(label: "Weekly", symbol: "square.fill")
+                }
+            }
+            .padding(.bottom, 8)
+
+            // Account cards
+            ForEach(Array(accounts.enumerated()), id: \.offset) { index, account in
+                if index > 0 {
+                    Divider()
+                        .padding(.vertical, 4)
+                }
+
+                if account.isConfigured {
+                    LargeAccountCard(account: account)
+                } else {
+                    LargeUnconfiguredCard(account: account)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .containerBackground(.fill.tertiary, for: .widget)
+    }
+}
+
+/// Legend item for the Large widget header
+struct LegendItem: View {
+    let label: String
+    let symbol: String
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: symbol)
+                .font(.system(size: 5))
+                .foregroundStyle(.secondary)
+            Text(label)
+                .font(.system(size: 8))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Configured account card for Large widget
+struct LargeAccountCard: View {
+    let account: AccountData
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Session: circular progress ring
+            VStack(spacing: 2) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 5)
+                    Circle()
+                        .trim(from: 0, to: account.sessionPercent)
+                        .stroke(colorForPercent(account.sessionPercent), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Text("\(Int(account.sessionPercent * 100))%")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(colorForPercent(account.sessionPercent))
+                }
+                .frame(width: 56, height: 56)
+                Text("Session")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
+
+            // Account info and weekly bar
+            VStack(alignment: .leading, spacing: 6) {
+                // Account name with status dot
+                HStack(spacing: 5) {
+                    StatusDot(color: colorForPercent(max(account.sessionPercent, account.weeklyPercent)))
+                    Text(account.name)
+                        .font(.callout)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+                }
+
+                // Weekly progress bar
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text("Weekly")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(Int(account.weeklyPercent * 100))%")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(colorForPercent(account.weeklyPercent))
+                    }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 6)
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(colorForPercent(account.weeklyPercent))
+                                .frame(width: geo.size.width * account.weeklyPercent, height: 6)
+                        }
+                    }
+                    .frame(height: 6)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(backgroundTintForPercent(max(account.sessionPercent, account.weeklyPercent)))
+        )
+    }
+}
+
+/// Unconfigured account card for Large widget
+struct LargeUnconfiguredCard: View {
+    let account: AccountData
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .stroke(Color.gray.opacity(0.15), lineWidth: 5)
+                Text("--")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(width: 56, height: 56)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    StatusDot(color: .gray.opacity(0.4))
+                    Text(account.name)
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                }
+                Text("Not configured")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.gray.opacity(0.05))
+        )
+    }
+}
+
 // MARK: - Widget Configuration
 
 struct ClaudeUsageWidget: Widget {
@@ -326,7 +508,7 @@ struct ClaudeUsageWidget: Widget {
         }
         .configurationDisplayName("Claude Usage")
         .description("Monitor your Claude API usage at a glance.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
 
@@ -336,6 +518,8 @@ struct ClaudeUsageWidgetEntryView: View {
 
     var body: some View {
         switch family {
+        case .systemLarge:
+            LargeWidgetView(accounts: entry.accounts)
         case .systemMedium:
             MediumWidgetView(accounts: entry.accounts)
         default:
@@ -363,5 +547,15 @@ struct ClaudeUsageWidgetEntryView: View {
         AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, isConfigured: true),
         AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, isConfigured: true),
         AccountData(name: "Personal", sessionPercent: 0.22, weeklyPercent: 0.15, isConfigured: true),
+    ])
+}
+
+#Preview("Large", as: .systemLarge) {
+    ClaudeUsageWidget()
+} timeline: {
+    AccountUsageEntry(date: Date(), accounts: [
+        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, isConfigured: true),
+        AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, isConfigured: true),
+        AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, isConfigured: false),
     ])
 }

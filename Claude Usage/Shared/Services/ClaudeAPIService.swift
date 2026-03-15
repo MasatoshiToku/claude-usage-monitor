@@ -422,32 +422,76 @@ class ClaudeAPIService: APIServiceProtocol {
         return claudeUsage
     }
 
-    /// Fetches usage data via OAuth access token (CLI credential flow)
+    /// Fetches usage data via OAuth access token using Messages API headers.
+    /// The dedicated OAuth usage endpoint (/api/oauth/usage) is disabled,
+    /// so we make a minimal Messages API call and extract usage from rate-limit headers.
     func fetchUsageData(oauthAccessToken: String) async throws -> ClaudeUsage {
-        guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
-            throw AppError(code: .urlMalformed, message: "Invalid OAuth usage endpoint", isRecoverable: false)
+        LoggingService.shared.log("ClaudeAPIService: Fetching usage via Messages API headers (OAuth, explicit token)")
+
+        guard let url = URL(string: "https://api.anthropic.com/v1/messages") else {
+            throw AppError(code: .urlMalformed, message: "Invalid Messages API endpoint", isRecoverable: false)
         }
 
         var request = buildAuthenticatedRequest(url: url, auth: .cliOAuth(oauthAccessToken))
-        request.httpMethod = "GET"
+        request.httpMethod = "POST"
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.timeoutInterval = 30
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        // Minimal request: cheapest model, 1 token, to get rate limit headers
+        let body: [String: Any] = [
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 1,
+            "messages": [["role": "user", "content": "hi"]]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AppError(code: .apiInvalidResponse, message: "Invalid response from OAuth endpoint", isRecoverable: true)
+        let startTime = Date()
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            let duration = Date().timeIntervalSince(startTime)
+            NetworkLoggerService.shared.logRequest(
+                url: url.absoluteString,
+                method: "POST",
+                requestBody: request.httpBody,
+                responseData: nil,
+                statusCode: nil,
+                duration: duration,
+                error: error
+            )
+            throw error
         }
 
+        let duration = Date().timeIntervalSince(startTime)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AppError(code: .apiInvalidResponse, message: "Invalid response from Messages API", isRecoverable: true)
+        }
+
+        NetworkLoggerService.shared.logRequest(
+            url: url.absoluteString,
+            method: "POST",
+            requestBody: request.httpBody,
+            responseData: data,
+            statusCode: httpResponse.statusCode,
+            duration: duration,
+            error: nil
+        )
+
         guard httpResponse.statusCode == 200 else {
+            let responsePreview = String(data: data, encoding: .utf8)?.prefix(200) ?? "Unable to read response"
             throw AppError(
                 code: httpResponse.statusCode == 401 || httpResponse.statusCode == 403
                     ? .apiUnauthorized : .apiGenericError,
-                message: "OAuth fetch failed (status \(httpResponse.statusCode))",
-                isRecoverable: true
+                message: "OAuth Messages API request failed",
+                technicalDetails: "Status: \(httpResponse.statusCode)\nResponse: \(responsePreview)",
+                isRecoverable: true,
+                recoverySuggestion: "Please re-sync your CLI account in Settings"
             )
         }
 
-        return try parseUsageResponse(data)
+        return parseUsageFromRateLimitHeaders(httpResponse)
     }
 
     /// Fetches real usage data from Claude's API

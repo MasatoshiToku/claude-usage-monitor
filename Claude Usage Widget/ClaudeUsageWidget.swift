@@ -423,7 +423,7 @@ struct LargeAccountCard: View {
                         .lineLimit(1)
                 }
 
-                // Weekly progress bar
+                // Weekly progress bar (ProgressView used instead of GeometryReader to avoid WidgetKit crash)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
                         Text("Weekly")
@@ -434,17 +434,8 @@ struct LargeAccountCard: View {
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(colorForPercent(account.weeklyPercent))
                     }
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 6)
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(colorForPercent(account.weeklyPercent))
-                                .frame(width: geo.size.width * account.weeklyPercent, height: 6)
-                        }
-                    }
-                    .frame(height: 6)
+                    ProgressView(value: account.weeklyPercent)
+                        .tint(colorForPercent(account.weeklyPercent))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

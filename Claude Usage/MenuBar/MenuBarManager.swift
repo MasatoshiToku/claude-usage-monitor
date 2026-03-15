@@ -910,6 +910,9 @@ class MenuBarManager: NSObject, ObservableObject {
                 self.lastSuccessfulRefreshTime = Date()
                 self.isRefreshing = false
 
+                // Update widget with latest profile data
+                WidgetDataService.shared.updateWidgetData(profiles: self.profileManager.profiles)
+
                 // Check auto-switch for the active profile
                 if let activeProfile = self.profileManager.activeProfile,
                    let activeUsage = activeProfile.claudeUsage {
@@ -1088,6 +1091,9 @@ class MenuBarManager: NSObject, ObservableObject {
                     self.lastRefreshError = nil
                     self.hasCredentialError = false
                     self.lastSuccessfulRefreshTime = Date()
+
+                    // Update widget with latest profile data
+                    WidgetDataService.shared.updateWidgetData(profiles: self.profileManager.profiles)
                 }
 
             } catch {

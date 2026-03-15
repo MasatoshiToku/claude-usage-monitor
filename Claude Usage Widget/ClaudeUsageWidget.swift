@@ -145,26 +145,14 @@ func backgroundTintForPercent(_ percent: Double) -> Color {
     colorForPercent(percent).opacity(0.07)
 }
 
-/// Unified reset time formatter for both session and weekly resets.
-/// - Within 1 hour: "XXm"
-/// - Within 24 hours: "XXh"
-/// - Beyond 24 hours: "M/dd HH:mm"
+/// Unified reset time formatter — always shows remaining time as H:mm countdown.
 func formatResetTime(_ resetDate: Date?) -> String? {
     guard let resetDate = resetDate else { return nil }
-    let now = Date()
-    if resetDate <= now { return nil }
-    let remaining = resetDate.timeIntervalSince(now)
-    if remaining < 3600 {
-        let minutes = Int(remaining / 60)
-        return "\(minutes)m"
-    } else if remaining < 86400 {
-        let hours = Int(remaining / 3600)
-        return "\(hours)h"
-    } else {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M/dd HH:mm"
-        return formatter.string(from: resetDate)
-    }
+    let remaining = resetDate.timeIntervalSinceNow
+    guard remaining > 0 else { return nil }
+    let hours = Int(remaining) / 3600
+    let minutes = (Int(remaining) % 3600) / 60
+    return String(format: "%d:%02d", hours, minutes)
 }
 
 /// Status dot indicator for account name

@@ -23,7 +23,12 @@ final class WidgetDataService {
     /// Call after usage data is refreshed for any profile
     func updateWidgetData(profiles: [Profile]) {
         // Ensure directory exists
-        try? FileManager.default.createDirectory(at: widgetDocumentsURL, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: widgetDocumentsURL, withIntermediateDirectories: true)
+        } catch {
+            LoggingService.shared.logError("WidgetDataService: Failed to create directory at \(widgetDocumentsURL.path) - \(error.localizedDescription)")
+            return
+        }
 
         // Build JSON array from profiles
         var accounts: [[String: Any]] = []
@@ -44,9 +49,12 @@ final class WidgetDataService {
             accounts.append(account)
         }
 
-        // Write as JSON file
-        if let data = try? JSONSerialization.data(withJSONObject: accounts, options: .prettyPrinted) {
-            try? data.write(to: dataFileURL, options: .atomic)
+        // Write as JSON file with error logging
+        do {
+            let data = try JSONSerialization.data(withJSONObject: accounts, options: .prettyPrinted)
+            try data.write(to: dataFileURL, options: .atomic)
+        } catch {
+            LoggingService.shared.logError("WidgetDataService: Failed to write widget data - \(error.localizedDescription)")
         }
 
         // Trigger widget reload

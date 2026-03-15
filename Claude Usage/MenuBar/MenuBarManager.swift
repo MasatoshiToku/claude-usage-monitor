@@ -159,6 +159,9 @@ class MenuBarManager: NSObject, ObservableObject {
             LoggingService.shared.log("Skipping initial refresh (no usage credentials)")
         }
 
+        // Update widget data on launch with cached profile data
+        WidgetDataService.shared.updateWidgetData(profiles: profileManager.profiles)
+
         // Start auto-refresh timer with active profile's interval
         startAutoRefresh()
 
@@ -812,11 +815,15 @@ class MenuBarManager: NSObject, ObservableObject {
             return
         }
 
+        for p in profileManager.profiles {
+        }
         let selectedProfiles = profileManager.profiles.filter { $0.isSelectedForDisplay && $0.hasUsageCredentials }
 
         guard !selectedProfiles.isEmpty else {
             LoggingService.shared.log("MenuBarManager: No selected profiles with usage credentials to refresh")
             updateAllStatusBarIcons()
+            // Still update widget with cached profile data even when no credentials available
+            WidgetDataService.shared.updateWidgetData(profiles: profileManager.profiles)
             return
         }
 
@@ -881,6 +888,9 @@ class MenuBarManager: NSObject, ObservableObject {
                         // Save to profile
                         self.profileManager.saveClaudeUsage(newUsage, for: profile.id)
                         LoggingService.shared.log("MenuBarManager: Saved usage for profile '\(profile.name)' - session: \(newUsage.sessionPercentage)%")
+
+                        // Update widget data after each profile save
+                        WidgetDataService.shared.updateWidgetData(profiles: self.profileManager.profiles)
 
                         // If this is the active profile, also update the manager's usage
                         if profile.id == self.profileManager.activeProfile?.id {
@@ -1007,6 +1017,8 @@ class MenuBarManager: NSObject, ObservableObject {
         LoggingService.shared.log("MenuBarManager: Single profile mode enabled")
     }
 
+
+
     func refreshUsage() {
         // In multi-profile mode, refresh ALL selected profiles
         if profileManager.displayMode == .multi {
@@ -1030,6 +1042,8 @@ class MenuBarManager: NSObject, ObservableObject {
             LoggingService.shared.log("MenuBarManager: Skipping refresh - no usage credentials")
             // Update icons to show default logo if needed
             updateAllStatusBarIcons()
+            // Still update widget with cached profile data
+            WidgetDataService.shared.updateWidgetData(profiles: profileManager.profiles)
             return
         }
 
@@ -1080,6 +1094,9 @@ class MenuBarManager: NSObject, ObservableObject {
                     if let profileId = self.profileManager.activeProfile?.id {
                         self.profileManager.saveClaudeUsage(newUsage, for: profileId)
                     }
+
+                    // Update widget data immediately after saving usage
+                    WidgetDataService.shared.updateWidgetData(profiles: self.profileManager.profiles)
 
                     // Write statusline cache for instant CLI rendering
                     if StatuslineService.shared.isInstalled {

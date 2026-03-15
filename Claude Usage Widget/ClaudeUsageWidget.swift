@@ -112,8 +112,12 @@ struct ClaudeUsageProvider: TimelineProvider {
     }
 }
 
-// MARK: - Color Helper
+// MARK: - Color Helpers
 
+/// Claude brand orange color (#FF6B35)
+let claudeOrange = Color(red: 1.0, green: 0.42, blue: 0.21)
+
+/// Returns green/orange/red based on usage percentage
 func colorForPercent(_ percent: Double) -> Color {
     if percent < 0.50 {
         return .green
@@ -124,6 +128,22 @@ func colorForPercent(_ percent: Double) -> Color {
     }
 }
 
+/// Subtle background tint for account sections based on usage level
+func backgroundTintForPercent(_ percent: Double) -> Color {
+    colorForPercent(percent).opacity(0.07)
+}
+
+/// Status dot indicator for account name
+struct StatusDot: View {
+    let color: Color
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 6, height: 6)
+    }
+}
+
 // MARK: - Small Widget View
 
 struct SmallWidgetView: View {
@@ -131,29 +151,48 @@ struct SmallWidgetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Claude Usage")
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+            // Title with Claude orange color
+            HStack(spacing: 3) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(claudeOrange)
+                Text("Claude Usage")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(claudeOrange)
+            }
 
             ForEach(Array(accounts.enumerated()), id: \.offset) { _, account in
                 if account.isConfigured {
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack {
+                        HStack(spacing: 4) {
+                            // Status dot next to account name
+                            StatusDot(color: colorForPercent(account.sessionPercent))
                             Text(account.name)
                                 .font(.caption2)
                                 .lineLimit(1)
                             Spacer()
+                            // Percentage text colored by usage level
                             Text("\(Int(account.sessionPercent * 100))%")
                                 .font(.caption2)
                                 .fontWeight(.bold)
                                 .foregroundStyle(colorForPercent(account.sessionPercent))
                         }
+                        // Progress bar fill color uses colorForPercent
                         ProgressView(value: account.sessionPercent)
                             .tint(colorForPercent(account.sessionPercent))
                     }
+                    // Subtle background tint based on usage level
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(backgroundTintForPercent(account.sessionPercent))
+                    )
                 } else {
-                    HStack {
+                    // Unconfigured accounts shown in gray
+                    HStack(spacing: 4) {
+                        StatusDot(color: .gray.opacity(0.4))
                         Text(account.name)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
@@ -162,6 +201,12 @@ struct SmallWidgetView: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.gray.opacity(0.05))
+                    )
                 }
             }
         }
@@ -179,13 +224,17 @@ struct MediumWidgetView: View {
             ForEach(Array(accounts.enumerated()), id: \.offset) { _, account in
                 if account.isConfigured {
                     VStack(spacing: 4) {
-                        Text(account.name)
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
+                        // Account name with status dot
+                        HStack(spacing: 3) {
+                            StatusDot(color: colorForPercent(account.sessionPercent))
+                            Text(account.name)
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .lineLimit(1)
+                        }
 
                         ZStack {
-                            // Session ring (outer)
+                            // Session ring (outer) - colored by usage level
                             Circle()
                                 .stroke(Color.gray.opacity(0.2), lineWidth: 4)
                             Circle()
@@ -193,7 +242,7 @@ struct MediumWidgetView: View {
                                 .stroke(colorForPercent(account.sessionPercent), style: StrokeStyle(lineWidth: 4, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
 
-                            // Weekly ring (inner)
+                            // Weekly ring (inner) - colored by usage level
                             Circle()
                                 .stroke(Color.gray.opacity(0.2), lineWidth: 3)
                                 .padding(6)
@@ -203,9 +252,11 @@ struct MediumWidgetView: View {
                                 .rotationEffect(.degrees(-90))
                                 .padding(6)
 
+                            // Center percentage text colored by usage level
                             VStack(spacing: 0) {
                                 Text("\(Int(account.sessionPercent * 100))%")
                                     .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(colorForPercent(account.sessionPercent))
                                 Text("ses")
                                     .font(.system(size: 7))
                                     .foregroundStyle(.secondary)
@@ -213,16 +264,27 @@ struct MediumWidgetView: View {
                         }
                         .frame(width: 50, height: 50)
 
+                        // Weekly percentage colored by usage level
                         Text("W: \(Int(account.weeklyPercent * 100))%")
                             .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(colorForPercent(account.weeklyPercent))
                     }
                     .frame(maxWidth: .infinity)
+                    // Subtle background tint based on session usage level
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(backgroundTintForPercent(account.sessionPercent))
+                    )
                 } else {
+                    // Unconfigured accounts shown in gray
                     VStack(spacing: 4) {
-                        Text(account.name)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                        HStack(spacing: 3) {
+                            StatusDot(color: .gray.opacity(0.4))
+                            Text(account.name)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
 
                         ZStack {
                             Circle()
@@ -238,6 +300,11 @@ struct MediumWidgetView: View {
                             .foregroundStyle(.tertiary)
                     }
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.gray.opacity(0.05))
+                    )
                 }
             }
         }

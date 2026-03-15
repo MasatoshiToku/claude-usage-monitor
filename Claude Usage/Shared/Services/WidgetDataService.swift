@@ -4,7 +4,7 @@ import WidgetKit
 /// Writes profile usage data to App Groups UserDefaults for the widget extension
 final class WidgetDataService {
     static let shared = WidgetDataService()
-    private let suiteName = "com.tokumasatoshi.claude-usage-monitor"
+    private let suiteName = "group.claudeusagemonitor"
 
     private init() {}
 

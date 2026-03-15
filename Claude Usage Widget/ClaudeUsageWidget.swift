@@ -20,7 +20,7 @@ struct AccountUsageEntry: TimelineEntry {
 // MARK: - Timeline Provider
 
 struct ClaudeUsageProvider: TimelineProvider {
-    private let suiteName = "com.tokumasatoshi.claude-usage-monitor"
+    private let suiteName = "group.claudeusagemonitor"
     private let maxAccounts = 3
 
     func placeholder(in context: Context) -> AccountUsageEntry {

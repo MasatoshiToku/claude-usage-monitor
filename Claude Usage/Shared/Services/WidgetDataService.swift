@@ -1,32 +1,59 @@
 import Foundation
 import WidgetKit
 
-/// Writes profile usage data to App Groups UserDefaults for the widget extension
+/// Writes profile usage data to the Group Container plist for the widget extension.
+/// The main app is non-sandboxed, so UserDefaults(suiteName:) writes to ~/Library/Preferences/.
+/// The widget is sandboxed, so it reads from ~/Library/Group Containers/.
+/// To bridge this gap, we write directly to the Group Container plist path.
 final class WidgetDataService {
     static let shared = WidgetDataService()
-    private let suiteName = "group.claudeusagemonitor"
+    private let groupID = "group.claudeusagemonitor"
 
-    private init() {}
+    private init() {
+        ensureGroupContainerExists()
+    }
+
+    private var groupContainerURL: URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return home.appendingPathComponent("Library/Group Containers/\(groupID)")
+    }
+
+    private var prefsURL: URL {
+        groupContainerURL
+            .appendingPathComponent("Library")
+            .appendingPathComponent("Preferences")
+            .appendingPathComponent("\(groupID).plist")
+    }
+
+    private func ensureGroupContainerExists() {
+        let prefsDir = groupContainerURL.appendingPathComponent("Library/Preferences")
+        try? FileManager.default.createDirectory(at: prefsDir, withIntermediateDirectories: true)
+    }
 
     /// Call after usage data is refreshed for any profile
     func updateWidgetData(profiles: [Profile]) {
-        guard let defaults = UserDefaults(suiteName: suiteName) else { return }
+        ensureGroupContainerExists()
+
+        var dict: [String: Any] = [:]
 
         for (index, profile) in profiles.prefix(3).enumerated() {
             let prefix = "widget.account.\(index)"
-            defaults.set(profile.name, forKey: "\(prefix).name")
+            dict["\(prefix).name"] = profile.name
 
             if let usage = profile.claudeUsage {
                 // ClaudeUsage percentages are 0-100 scale; widget expects 0-1 scale
-                defaults.set(usage.effectiveSessionPercentage / 100.0, forKey: "\(prefix).sessionPercent")
-                defaults.set(usage.weeklyPercentage / 100.0, forKey: "\(prefix).weeklyPercent")
-                defaults.set(true, forKey: "\(prefix).isConfigured")
+                dict["\(prefix).sessionPercent"] = usage.effectiveSessionPercentage / 100.0
+                dict["\(prefix).weeklyPercent"] = usage.weeklyPercentage / 100.0
+                dict["\(prefix).isConfigured"] = true
             } else {
-                defaults.set(0.0, forKey: "\(prefix).sessionPercent")
-                defaults.set(0.0, forKey: "\(prefix).weeklyPercent")
-                defaults.set(profile.hasUsageCredentials, forKey: "\(prefix).isConfigured")
+                dict["\(prefix).sessionPercent"] = 0.0
+                dict["\(prefix).weeklyPercent"] = 0.0
+                dict["\(prefix).isConfigured"] = profile.hasUsageCredentials
             }
         }
+
+        // Write directly to the Group Container plist so the sandboxed widget can read it
+        (dict as NSDictionary).write(to: prefsURL, atomically: true)
 
         // Trigger widget reload
         WidgetCenter.shared.reloadAllTimelines()

@@ -1,38 +1,33 @@
 import Foundation
 import WidgetKit
 
-/// Writes profile usage data to the Group Container plist for the widget extension.
-/// The main app is non-sandboxed, so UserDefaults(suiteName:) writes to ~/Library/Preferences/.
-/// The widget is sandboxed, so it reads from ~/Library/Group Containers/.
-/// To bridge this gap, we write directly to the Group Container plist path.
+/// Writes profile usage data directly to the widget extension's sandbox container.
+/// The main app is non-sandboxed, so it can write to any path including the widget's container.
+/// The widget reads via UserDefaults.standard, which maps to its own container's Preferences plist.
 final class WidgetDataService {
     static let shared = WidgetDataService()
-    private let groupID = "group.claudeusagemonitor"
+    private let widgetBundleID = "com.tokumasatoshi.claude-usage-monitor.widget"
 
     private init() {
-        ensureGroupContainerExists()
+        ensureWidgetPrefsDirectoryExists()
     }
 
-    private var groupContainerURL: URL {
+    private var widgetPrefsDirectory: URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        return home.appendingPathComponent("Library/Group Containers/\(groupID)")
+        return home.appendingPathComponent("Library/Containers/\(widgetBundleID)/Data/Library/Preferences")
     }
 
-    private var prefsURL: URL {
-        groupContainerURL
-            .appendingPathComponent("Library")
-            .appendingPathComponent("Preferences")
-            .appendingPathComponent("\(groupID).plist")
+    private var widgetPrefsURL: URL {
+        widgetPrefsDirectory.appendingPathComponent("\(widgetBundleID).plist")
     }
 
-    private func ensureGroupContainerExists() {
-        let prefsDir = groupContainerURL.appendingPathComponent("Library/Preferences")
-        try? FileManager.default.createDirectory(at: prefsDir, withIntermediateDirectories: true)
+    private func ensureWidgetPrefsDirectoryExists() {
+        try? FileManager.default.createDirectory(at: widgetPrefsDirectory, withIntermediateDirectories: true)
     }
 
     /// Call after usage data is refreshed for any profile
     func updateWidgetData(profiles: [Profile]) {
-        ensureGroupContainerExists()
+        ensureWidgetPrefsDirectoryExists()
 
         var dict: [String: Any] = [:]
 
@@ -52,8 +47,8 @@ final class WidgetDataService {
             }
         }
 
-        // Write directly to the Group Container plist so the sandboxed widget can read it
-        (dict as NSDictionary).write(to: prefsURL, atomically: true)
+        // Write directly to the widget's sandbox Preferences plist
+        (dict as NSDictionary).write(to: widgetPrefsURL, atomically: true)
 
         // Trigger widget reload
         WidgetCenter.shared.reloadAllTimelines()

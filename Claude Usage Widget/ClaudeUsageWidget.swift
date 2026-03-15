@@ -20,7 +20,6 @@ struct AccountUsageEntry: TimelineEntry {
 // MARK: - Timeline Provider
 
 struct ClaudeUsageProvider: TimelineProvider {
-    private let suiteName = "group.claudeusagemonitor"
     private let maxAccounts = 3
 
     func placeholder(in context: Context) -> AccountUsageEntry {
@@ -40,9 +39,7 @@ struct ClaudeUsageProvider: TimelineProvider {
     }
 
     private func loadAccounts() -> [AccountData] {
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return sampleAccounts()
-        }
+        let defaults = UserDefaults.standard
         var accounts: [AccountData] = []
         for i in 0..<maxAccounts {
             let name = defaults.string(forKey: "widget.account.\(i).name") ?? "Account \(i + 1)"

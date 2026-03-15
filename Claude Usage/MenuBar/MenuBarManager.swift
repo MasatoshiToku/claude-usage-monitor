@@ -585,6 +585,8 @@ class MenuBarManager: NSObject, ObservableObject {
     // MARK: - Icon Style: Battery (Classic)
 
     private func startAutoRefresh() {
+        // Invalidate existing timer to prevent duplicate timers on the run loop
+        refreshTimer?.invalidate()
         let interval = profileManager.activeProfile?.refreshInterval ?? 30.0
         refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.lastAutoRefreshTime = Date()
@@ -730,6 +732,8 @@ class MenuBarManager: NSObject, ObservableObject {
         if displayMode == .multi {
             // Switch to multi-profile mode
             setupMultiProfileMode()
+            // Fetch data for all profiles after mode switch
+            refreshUsage()
         } else {
             // Switch back to single profile mode
             setupSingleProfileMode()
@@ -787,8 +791,9 @@ class MenuBarManager: NSObject, ObservableObject {
 
         LoggingService.shared.log("MenuBarManager: Multi-profile mode enabled with \(selectedProfiles.count) profiles, style=\(config.iconStyle.rawValue)")
 
-        // Refresh data for all selected profiles that have credentials
-        refreshAllSelectedProfiles()
+        // NOTE: refresh is NOT triggered here to prevent duplicate fetches.
+        // Callers that need a refresh (setup, profile switch, display mode change)
+        // should call refreshUsage() separately.
     }
 
     /// Timestamp of the last completed multi-profile refresh (for deduplication)
@@ -815,13 +820,12 @@ class MenuBarManager: NSObject, ObservableObject {
             return
         }
 
+        // Set refreshing flag synchronously to block concurrent calls
+        isRefreshing = true
+
         LoggingService.shared.log("MenuBarManager: Refreshing \(selectedProfiles.count) selected profiles for multi-profile mode")
 
         Task {
-            await MainActor.run {
-                self.isRefreshing = true
-            }
-
             // Fetch Claude status (same as single profile mode)
             do {
                 let newStatus = try await statusService.fetchStatus()

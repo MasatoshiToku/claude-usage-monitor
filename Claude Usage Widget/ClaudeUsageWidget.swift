@@ -145,38 +145,22 @@ func backgroundTintForPercent(_ percent: Double) -> Color {
     colorForPercent(percent).opacity(0.07)
 }
 
-/// Formats the session reset time as relative or absolute
-func resetTimeText(_ resetDate: Date?) -> String? {
+/// Unified reset time formatter for both session and weekly resets.
+/// - Within 1 hour: "XXm"
+/// - Within 24 hours: "XXh"
+/// - Beyond 24 hours: "M/dd HH:mm"
+func formatResetTime(_ resetDate: Date?) -> String? {
     guard let resetDate = resetDate else { return nil }
     let now = Date()
     if resetDate <= now { return nil }
     let remaining = resetDate.timeIntervalSince(now)
     if remaining < 3600 {
         let minutes = Int(remaining / 60)
-        return "\(minutes)\u{5206}\u{5F8C}"
-    } else {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: resetDate)
-    }
-}
-
-/// Formats the weekly reset time as relative or date+time
-func weeklyResetTimeText(_ resetDate: Date?) -> String? {
-    guard let resetDate = resetDate else { return nil }
-    let now = Date()
-    if resetDate <= now { return nil }
-    let remaining = resetDate.timeIntervalSince(now)
-    if remaining < 86400 {
-        // Within 24 hours: relative format
+        return "\(minutes)m"
+    } else if remaining < 86400 {
         let hours = Int(remaining / 3600)
-        if hours > 0 {
-            return "\(hours)時間後"
-        }
-        let minutes = Int(remaining / 60)
-        return "\(minutes)分後"
+        return "\(hours)h"
     } else {
-        // Beyond 24 hours: date + time format
         let formatter = DateFormatter()
         formatter.dateFormat = "M/dd HH:mm"
         return formatter.string(from: resetDate)
@@ -191,6 +175,27 @@ struct StatusDot: View {
         Circle()
             .fill(color)
             .frame(width: 6, height: 6)
+    }
+}
+
+/// Consistent reset time display with clock icon
+struct ResetTimeLabel: View {
+    let prefix: String
+    let resetDate: Date?
+    let fontSize: CGFloat
+    let iconSize: CGFloat
+
+    var body: some View {
+        if let text = formatResetTime(resetDate) {
+            HStack(spacing: 2) {
+                Image(systemName: "clock")
+                    .font(.system(size: iconSize))
+                    .foregroundStyle(.secondary)
+                Text("\(prefix)\(text)")
+                    .font(.system(size: fontSize))
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
@@ -215,14 +220,13 @@ struct SmallWidgetView: View {
             ForEach(Array(accounts.enumerated()), id: \.offset) { _, account in
                 if account.isConfigured {
                     VStack(alignment: .leading, spacing: 2) {
+                        // Account name with status dot and percentages
                         HStack(spacing: 4) {
-                            // Status dot based on higher usage level
                             StatusDot(color: colorForPercent(max(account.sessionPercent, account.weeklyPercent)))
                             Text(account.name)
                                 .font(.caption2)
                                 .lineLimit(1)
                             Spacer()
-                            // Session and weekly percentages side by side
                             Text("S:")
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
@@ -244,31 +248,12 @@ struct SmallWidgetView: View {
                         ProgressView(value: account.weeklyPercent)
                             .tint(colorForPercent(account.weeklyPercent))
                             .scaleEffect(y: 0.8)
-                        // Reset times
+                        // Reset times with consistent format
                         HStack(spacing: 6) {
-                            if let resetText = resetTimeText(account.sessionResetAt) {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "arrow.counterclockwise")
-                                        .font(.system(size: 6))
-                                        .foregroundStyle(.secondary)
-                                    Text(resetText)
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            if let wResetText = weeklyResetTimeText(account.weeklyResetAt) {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "calendar")
-                                        .font(.system(size: 6))
-                                        .foregroundStyle(.secondary)
-                                    Text(wResetText)
-                                        .font(.system(size: 8))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                            ResetTimeLabel(prefix: "S:", resetDate: account.sessionResetAt, fontSize: 8, iconSize: 6)
+                            ResetTimeLabel(prefix: "W:", resetDate: account.weeklyResetAt, fontSize: 8, iconSize: 6)
                         }
                     }
-                    // Subtle background tint based on higher usage level
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
                     .background(
@@ -310,9 +295,9 @@ struct MediumWidgetView: View {
             ForEach(Array(accounts.enumerated()), id: \.offset) { _, account in
                 if account.isConfigured {
                     VStack(spacing: 4) {
-                        // Account name with status dot
+                        // Account name with status dot (color based on max usage)
                         HStack(spacing: 3) {
-                            StatusDot(color: colorForPercent(account.sessionPercent))
+                            StatusDot(color: colorForPercent(max(account.sessionPercent, account.weeklyPercent)))
                             Text(account.name)
                                 .font(.caption2)
                                 .fontWeight(.semibold)
@@ -338,51 +323,32 @@ struct MediumWidgetView: View {
                                 .rotationEffect(.degrees(-90))
                                 .padding(6)
 
-                            // Center percentage text colored by usage level
+                            // Center percentage text
                             VStack(spacing: 0) {
                                 Text("\(Int(account.sessionPercent * 100))%")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(colorForPercent(account.sessionPercent))
-                                Text("Session")
+                                Text("S:")
                                     .font(.system(size: 7))
                                     .foregroundStyle(.secondary)
                             }
                         }
                         .frame(width: 50, height: 50)
 
-                        // Weekly percentage with clear label
-                        Text("Week: \(Int(account.weeklyPercent * 100))%")
-                            .font(.system(size: 9))
+                        // Weekly percentage with compact label
+                        Text("W: \(Int(account.weeklyPercent * 100))%")
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(colorForPercent(account.weeklyPercent))
                         // Session reset time
-                        if let resetText = resetTimeText(account.sessionResetAt) {
-                            HStack(spacing: 2) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 7))
-                                    .foregroundStyle(.secondary)
-                                Text(resetText)
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        ResetTimeLabel(prefix: "S:", resetDate: account.sessionResetAt, fontSize: 8, iconSize: 7)
                         // Weekly reset time
-                        if let wResetText = weeklyResetTimeText(account.weeklyResetAt) {
-                            HStack(spacing: 2) {
-                                Image(systemName: "calendar")
-                                    .font(.system(size: 7))
-                                    .foregroundStyle(.secondary)
-                                Text(wResetText)
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        ResetTimeLabel(prefix: "W:", resetDate: account.weeklyResetAt, fontSize: 8, iconSize: 7)
                     }
                     .frame(maxWidth: .infinity)
-                    // Subtle background tint based on session usage level
                     .padding(.vertical, 4)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(backgroundTintForPercent(account.sessionPercent))
+                            .fill(backgroundTintForPercent(max(account.sessionPercent, account.weeklyPercent)))
                     )
                 } else {
                     // Unconfigured accounts shown in gray
@@ -509,7 +475,7 @@ struct LargeAccountCard: View {
 
             // Account info and weekly bar
             VStack(alignment: .leading, spacing: 6) {
-                // Account name with status dot
+                // Account name with status dot (color based on max usage)
                 HStack(spacing: 5) {
                     StatusDot(color: colorForPercent(max(account.sessionPercent, account.weeklyPercent)))
                     Text(account.name)
@@ -518,7 +484,7 @@ struct LargeAccountCard: View {
                         .lineLimit(1)
                 }
 
-                // Weekly progress bar (ProgressView used instead of GeometryReader to avoid WidgetKit crash)
+                // Weekly progress bar
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
                         Text("Weekly")
@@ -533,31 +499,9 @@ struct LargeAccountCard: View {
                         .tint(colorForPercent(account.weeklyPercent))
                 }
 
-                // Session reset time
-                if let resetText = resetTimeText(account.sessionResetAt) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
-                        Text("Reset: \(resetText)")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                }
-
-                // Weekly reset time
-                if let wResetText = weeklyResetTimeText(account.weeklyResetAt) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
-                        Text("Weekly Reset: \(wResetText)")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                }
+                // Reset times with consistent format and icons
+                ResetTimeLabel(prefix: "Session: ", resetDate: account.sessionResetAt, fontSize: 10, iconSize: 9)
+                ResetTimeLabel(prefix: "Weekly: ", resetDate: account.weeklyResetAt, fontSize: 10, iconSize: 9)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import os
 
 // MARK: - Data Model
 
@@ -21,6 +22,7 @@ struct AccountUsageEntry: TimelineEntry {
 
 struct ClaudeUsageProvider: TimelineProvider {
     private let maxAccounts = 3
+    private let logger = Logger(subsystem: "com.tokumasatoshi.claude-usage-monitor.widget", category: "data")
 
     func placeholder(in context: Context) -> AccountUsageEntry {
         AccountUsageEntry(date: Date(), accounts: sampleAccounts())
@@ -39,25 +41,65 @@ struct ClaudeUsageProvider: TimelineProvider {
     }
 
     private func loadAccounts() -> [AccountData] {
-        // Read from JSON file in widget's own Documents directory
-        guard let docsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            return sampleAccounts()
+        logger.info("=== Widget loadAccounts() START ===")
+
+        // Attempt 1: Standard documentDirectory
+        if let docsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            logger.info("Widget documentDirectory: \(docsURL.path)")
+            let fileURL = docsURL.appendingPathComponent("widget-data.json")
+            let exists = FileManager.default.fileExists(atPath: fileURL.path)
+            logger.info("Widget file exists at documentDirectory: \(exists)")
+
+            if exists {
+                if let result = parseWidgetData(from: fileURL) {
+                    logger.info("Widget loaded \(result.count) accounts from documentDirectory")
+                    return result
+                }
+            }
+        } else {
+            logger.error("Widget documentDirectory: UNAVAILABLE")
         }
 
-        let fileURL = docsURL.appendingPathComponent("widget-data.json")
+        // Attempt 2: Hardcoded fallback path
+        let fallbackURL = URL(fileURLWithPath: "/Users/tokumasatoshi/Library/Containers/com.tokumasatoshi.claude-usage-monitor.widget/Data/Documents/widget-data.json")
+        let fallbackExists = FileManager.default.fileExists(atPath: fallbackURL.path)
+        logger.info("Widget fallback path: \(fallbackURL.path)")
+        logger.info("Widget fallback file exists: \(fallbackExists)")
 
-        guard let data = try? Data(contentsOf: fileURL),
-              let accounts = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            return sampleAccounts()
+        if fallbackExists {
+            if let result = parseWidgetData(from: fallbackURL) {
+                logger.info("Widget loaded \(result.count) accounts from fallback path")
+                return result
+            }
         }
 
-        return accounts.enumerated().map { index, dict in
-            AccountData(
-                name: dict["name"] as? String ?? "Account \(index + 1)",
-                sessionPercent: dict["sessionPercent"] as? Double ?? 0,
-                weeklyPercent: dict["weeklyPercent"] as? Double ?? 0,
-                isConfigured: dict["isConfigured"] as? Bool ?? false
-            )
+        logger.warning("Widget: no data found, returning sample accounts")
+        return sampleAccounts()
+    }
+
+    private func parseWidgetData(from fileURL: URL) -> [AccountData]? {
+        do {
+            let data = try Data(contentsOf: fileURL)
+            logger.info("Widget file read OK, \(data.count) bytes")
+
+            guard let accounts = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                logger.error("Widget JSON parse failed: not an array of dictionaries")
+                return nil
+            }
+
+            logger.info("Widget parsed \(accounts.count) accounts from JSON")
+
+            return accounts.enumerated().map { index, dict in
+                AccountData(
+                    name: dict["name"] as? String ?? "Account \(index + 1)",
+                    sessionPercent: dict["sessionPercent"] as? Double ?? 0,
+                    weeklyPercent: dict["weeklyPercent"] as? Double ?? 0,
+                    isConfigured: dict["isConfigured"] as? Bool ?? false
+                )
+            }
+        } catch {
+            logger.error("Widget file read/parse error: \(error.localizedDescription)")
+            return nil
         }
     }
 

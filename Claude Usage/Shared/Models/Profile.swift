@@ -61,7 +61,7 @@ struct Profile: Codable, Identifiable, Equatable {
         claudeUsage: ClaudeUsage? = nil,
         apiUsage: APIUsage? = nil,
         iconConfig: MenuBarIconConfiguration = .default,
-        refreshInterval: TimeInterval = 30.0,
+        refreshInterval: TimeInterval = 60.0,
         autoStartSessionEnabled: Bool = false,
         checkOverageLimitEnabled: Bool = true,
         notificationSettings: NotificationSettings = NotificationSettings(),

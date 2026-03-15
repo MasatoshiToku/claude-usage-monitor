@@ -14,7 +14,7 @@ class ProfileManager: ObservableObject {
 
     @Published var profiles: [Profile] = []
     @Published var activeProfile: Profile?
-    @Published var displayMode: ProfileDisplayMode = .single
+    @Published var displayMode: ProfileDisplayMode = .multi
     @Published var multiProfileConfig: MultiProfileDisplayConfig = .default
     @Published var isSwitchingProfile: Bool = false
 
@@ -30,14 +30,17 @@ class ProfileManager: ObservableObject {
     func loadProfiles() {
         profiles = profileStore.loadProfiles()
 
-        // Ensure minimum 1 profile
+        // Ensure exactly 3 profiles (fixed count)
         if profiles.isEmpty {
-            let defaultProfile = createDefaultProfile()
-            profiles = [defaultProfile]
+            let profile1 = Profile(name: "Account 1", iconConfig: .default, refreshInterval: 60.0, isSelectedForDisplay: true)
+            let profile2 = Profile(name: "Account 2", iconConfig: .default, refreshInterval: 60.0, isSelectedForDisplay: true)
+            let profile3 = Profile(name: "Account 3", iconConfig: .default, refreshInterval: 60.0, isSelectedForDisplay: true)
+            profiles = [profile1, profile2, profile3]
             profileStore.saveProfiles(profiles)
+            profileStore.saveDisplayMode(.multi)
 
-            // On first launch, try to sync CLI credentials to the new default profile
-            syncCLICredentialsToDefaultProfile(defaultProfile.id)
+            // On first launch, try to sync CLI credentials to the first profile
+            syncCLICredentialsToDefaultProfile(profile1.id)
         }
 
         // Load active profile
@@ -59,7 +62,13 @@ class ProfileManager: ObservableObject {
 
     // MARK: - Profile Operations
 
-    func createProfile(name: String? = nil, copySettingsFrom: Profile? = nil) -> Profile {
+    /// Profile count is fixed at 3. New profiles cannot be created.
+    func createProfile(name: String? = nil, copySettingsFrom: Profile? = nil) -> Profile? {
+        guard profiles.count < 3 else {
+            LoggingService.shared.log("ProfileManager: Cannot create profile, maximum of 3 profiles reached")
+            return nil
+        }
+
         let usedNames = profiles.map { $0.name }
         let profileName = name ?? FunnyNameGenerator.getRandomName(excluding: usedNames)
 
@@ -68,7 +77,7 @@ class ProfileManager: ObservableObject {
             name: profileName,
             hasCliAccount: false,
             iconConfig: copySettingsFrom?.iconConfig ?? .default,
-            refreshInterval: copySettingsFrom?.refreshInterval ?? 30.0,
+            refreshInterval: copySettingsFrom?.refreshInterval ?? 60.0,
             autoStartSessionEnabled: copySettingsFrom?.autoStartSessionEnabled ?? false,
             checkOverageLimitEnabled: copySettingsFrom?.checkOverageLimitEnabled ?? true,
             notificationSettings: copySettingsFrom?.notificationSettings ?? NotificationSettings(),
@@ -104,10 +113,9 @@ class ProfileManager: ObservableObject {
         }
     }
 
+    /// Profile count is fixed at 3. Profiles cannot be deleted.
     func deleteProfile(_ id: UUID) throws {
-        guard profiles.count > 1 else {
-            throw ProfileError.cannotDeleteLastProfile
-        }
+        throw ProfileError.cannotDeleteFixedProfile
 
         let profileName = profiles.first(where: { $0.id == id })?.name ?? "unknown"
 
@@ -524,7 +532,7 @@ class ProfileManager: ObservableObject {
         Profile(
             name: FunnyNameGenerator.getRandomName(excluding: []),
             iconConfig: .default,
-            refreshInterval: 30.0,
+            refreshInterval: 60.0,
             autoStartSessionEnabled: false,
             checkOverageLimitEnabled: true,
             notificationSettings: NotificationSettings()
@@ -537,11 +545,14 @@ class ProfileManager: ObservableObject {
 
 enum ProfileError: LocalizedError {
     case cannotDeleteLastProfile
+    case cannotDeleteFixedProfile
 
     var errorDescription: String? {
         switch self {
         case .cannotDeleteLastProfile:
             return "Cannot delete the last profile. At least one profile is required."
+        case .cannotDeleteFixedProfile:
+            return "Cannot delete profiles. The app uses a fixed set of 3 profiles."
         }
     }
 }

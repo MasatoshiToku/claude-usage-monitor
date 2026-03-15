@@ -15,10 +15,10 @@ class ProfileStore {
     private let keychainService = KeychainService.shared
 
     private enum Keys {
-        static let profiles = "profiles_v3"
-        static let activeProfileId = "activeProfileId"
-        static let displayMode = "profileDisplayMode"
-        static let multiProfileConfig = "multiProfileDisplayConfig"
+        static let profiles = "cum_profiles_v3"
+        static let activeProfileId = "cum_activeProfileId"
+        static let displayMode = "cum_profileDisplayMode"
+        static let multiProfileConfig = "cum_multiProfileDisplayConfig"
     }
 
     init() {
@@ -82,7 +82,7 @@ class ProfileStore {
     func loadDisplayMode() -> ProfileDisplayMode {
         guard let rawValue = defaults.string(forKey: Keys.displayMode),
               let mode = ProfileDisplayMode(rawValue: rawValue) else {
-            return .single
+            return .multi
         }
         return mode
     }

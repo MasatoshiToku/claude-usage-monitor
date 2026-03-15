@@ -109,34 +109,8 @@ class MenuBarManager: NSObject, ObservableObject {
         statusBarUIManager = StatusBarUIManager()
         statusBarUIManager?.delegate = self
 
-        // Check if we should use multi-profile mode
-        if profileManager.displayMode == .multi {
-            // Multi-profile mode - setup with selected profiles
-            setupMultiProfileMode()
-        } else {
-            // Single profile mode - setup with active profile's config
-            let config = profileManager.activeProfile?.iconConfig ?? .default
-            let hasUsageCredentials = profileManager.activeProfile?.hasUsageCredentials ?? false
-
-            // If no usage credentials, create empty config to show default logo
-            let displayConfig: MenuBarIconConfiguration
-            if !hasUsageCredentials {
-                displayConfig = MenuBarIconConfiguration(
-                    colorMode: config.colorMode,
-                    singleColorHex: config.singleColorHex,
-                    showIconNames: config.showIconNames,
-                    metrics: config.metrics.map { metric in
-                        var updatedMetric = metric
-                        updatedMetric.isEnabled = false
-                        return updatedMetric
-                    }
-                )
-            } else {
-                displayConfig = config
-            }
-
-            statusBarUIManager?.setup(target: self, action: #selector(togglePopover), config: displayConfig)
-        }
+        // Always use multi-profile mode (3-account display)
+        setupMultiProfileMode()
 
         // Setup popover
         setupPopover()
@@ -898,7 +872,12 @@ class MenuBarManager: NSObject, ObservableObject {
                         }
                     }
                 } catch {
-                    LoggingService.shared.logError("Failed to refresh profile '\(profile.name)': \(error.localizedDescription)")
+                    let appError = AppError.wrap(error)
+                    LoggingService.shared.logError("Failed to refresh profile '\(profile.name)': \(appError.message)")
+                    // Notify user about 401 error via macOS notification
+                    if appError.code == .apiUnauthorized || appError.code == .sessionKeyExpired {
+                        ReauthNotificationService.shared.notify401(for: profile.id, profileName: profile.name)
+                    }
                 }
 
                 // Fetch API usage if this profile has API console credentials
@@ -1133,6 +1112,11 @@ class MenuBarManager: NSObject, ObservableObject {
                     // Track credential errors specifically
                     if appError.code == .apiUnauthorized || appError.code == .sessionKeyExpired {
                         self.hasCredentialError = true
+                        // Notify user about 401 error via macOS notification
+                        if let profileId = self.profileManager.activeProfile?.id,
+                           let profileName = self.profileManager.activeProfile?.name {
+                            ReauthNotificationService.shared.notify401(for: profileId, profileName: profileName)
+                        }
                     }
 
                     // Check if this refresh was triggered within last 5 seconds

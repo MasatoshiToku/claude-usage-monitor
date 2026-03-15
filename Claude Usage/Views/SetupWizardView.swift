@@ -139,6 +139,20 @@ struct SetupWizardView: View {
                 .padding(.bottom, 16)
             }
 
+            // Multi-account info note
+            HStack(spacing: 8) {
+                Image(systemName: "person.3.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.accentColor)
+                Text("This app monitors up to 3 Claude.ai accounts simultaneously. You can add more accounts in Settings after setup.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+            .background(Color.accentColor.opacity(0.06))
+
             Divider()
 
             // Claude Code info section - compact (only show if credentials exist)

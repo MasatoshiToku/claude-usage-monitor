@@ -3,7 +3,7 @@ import Foundation
 /// Application-wide constants
 enum Constants {
     // App Group identifier for sharing data between app and widgets
-    static let appGroupIdentifier = "group.com.claudeusagetracker.shared"
+    static let appGroupIdentifier = "group.com.claudeusagemonitor.shared"
 
     // UserDefaults keys
     enum UserDefaultsKeys {
@@ -88,7 +88,7 @@ enum Constants {
 
     // Refresh intervals (in seconds)
     enum RefreshIntervals {
-        static let menuBar: TimeInterval = 30        // 30 seconds
+        static let menuBar: TimeInterval = 60        // 60 seconds
         static let widgetSmall: TimeInterval = 900   // 15 minutes
         static let widgetMedium: TimeInterval = 900  // 15 minutes
         static let widgetLarge: TimeInterval = 1800  // 30 minutes
@@ -111,7 +111,7 @@ enum Constants {
     }
 
     // GitHub repository
-    static let githubRepoURL = "https://github.com/hamed-elfayome/Claude-Usage-Tracker"
+    static let githubRepoURL = "https://github.com/MasatoshiToku/claude-usage-monitor"
 
     // GitHub star prompt timing (in seconds)
     enum GitHubPromptTiming {
@@ -147,8 +147,8 @@ enum Constants {
 
     // GitHub Repository Info
     enum GitHub {
-        static let owner = "hamed-elfayome"
-        static let repo = "Claude-Usage-Tracker"
+        static let owner = "MasatoshiToku"
+        static let repo = "claude-usage-monitor"
         static let repoURL = "https://github.com/\(owner)/\(repo)"
     }
 }

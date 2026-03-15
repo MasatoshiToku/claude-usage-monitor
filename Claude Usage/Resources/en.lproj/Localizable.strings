@@ -138,10 +138,10 @@
 /* ==================== */
 /* MARK: - Setup Wizard */
 /* ==================== */
-"setup.welcome.title" = "Welcome to Claude Usage Tracker";
-"setup.welcome.subtitle" = "Configure your API access to start tracking usage";
+"setup.welcome.title" = "Welcome to Claude Usage Monitor";
+"setup.welcome.subtitle" = "Set up your first Claude.ai account (supports up to 3 accounts)";
 "setup.step.get_session_key" = "Get Your Session Key";
-"setup.step.get_session_key.description" = "You'll need to extract your session key from claude.ai";
+"setup.step.get_session_key.description" = "Sign in to your Claude.ai account. You can add more accounts later in Settings.";
 "setup.step.enter_session_key" = "Enter Your Session Key";
 "setup.open_claude_ai" = "Open claude.ai";
 "setup.show_instructions" = "Show Instructions";

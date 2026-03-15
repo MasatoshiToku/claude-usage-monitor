@@ -9,8 +9,6 @@ import SwiftUI
 
 struct ManageProfilesView: View {
     @StateObject private var profileManager = ProfileManager.shared
-    @State private var showingCreateProfile = false
-    @State private var newProfileName = ""
     @State private var errorMessage: String?
 
     var body: some View {
@@ -34,14 +32,6 @@ struct ManageProfilesView: View {
                             }
                         }
                     }
-                }
-
-                // Create New Profile Button
-                SettingsButton(
-                    title: "profiles.create_new".localized,
-                    icon: "plus.circle.fill"
-                ) {
-                    showingCreateProfile = true
                 }
 
                 // Multi-Profile Display Section
@@ -293,26 +283,10 @@ struct ManageProfilesView: View {
             }
             .padding()
         }
-        .sheet(isPresented: $showingCreateProfile) {
-            CreateProfileSheet(
-                profileName: $newProfileName,
-                onSave: {
-                    createNewProfile()
-                },
-                onCancel: {
-                    showingCreateProfile = false
-                    newProfileName = ""
-                }
-            )
-        }
+
     }
 
-    private func createNewProfile() {
-        let name = newProfileName.isEmpty ? nil : newProfileName
-        _ = profileManager.createProfile(name: name)
-        showingCreateProfile = false
-        newProfileName = ""
-    }
+
 }
 
 // MARK: - Profile Row
@@ -322,7 +296,6 @@ struct ProfileRow: View {
     @StateObject private var profileManager = ProfileManager.shared
     @State private var isEditing = false
     @State private var editedName: String = ""
-    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -389,18 +362,7 @@ struct ProfileRow: View {
                         .help("profiles.activate".localized)
                     }
 
-                    // Delete Button (if not the last profile)
-                    if profileManager.profiles.count > 1 {
-                        Button(action: {
-                            showingDeleteConfirmation = true
-                        }) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 12))
-                                .foregroundColor(.red)
-                        }
-                        .buttonStyle(.plain)
-                        .help("profiles.delete".localized)
-                    }
+
                 } else {
                     // Save Button
                     Button(action: {
@@ -424,14 +386,7 @@ struct ProfileRow: View {
                 }
             }
         }
-        .alert("profiles.delete_title".localized, isPresented: $showingDeleteConfirmation) {
-            Button("common.cancel".localized, role: .cancel) {}
-            Button("common.delete".localized, role: .destructive) {
-                deleteProfile()
-            }
-        } message: {
-            Text(String(format: "profiles.delete_confirm".localized, profile.name))
-        }
+
     }
 
     private var profileInfo: String {
@@ -455,53 +410,7 @@ struct ProfileRow: View {
         isEditing = false
     }
 
-    private func deleteProfile() {
-        do {
-            try profileManager.deleteProfile(profile.id)
-        } catch {
-            // Error handled by ProfileManager
-        }
-    }
+
 }
 
-// MARK: - Create Profile Sheet
 
-struct CreateProfileSheet: View {
-    @Binding var profileName: String
-    let onSave: () -> Void
-    let onCancel: () -> Void
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("profiles.create_title".localized)
-                .font(.system(size: 18, weight: .semibold))
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("profiles.name_label".localized)
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-
-                TextField("profiles.name_placeholder".localized, text: $profileName)
-                    .textFieldStyle(.roundedBorder)
-
-                Text("profiles.name_hint".localized)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-            }
-
-            HStack(spacing: 12) {
-                Button("common.cancel".localized) {
-                    onCancel()
-                }
-                .buttonStyle(.plain)
-
-                Button("common.create".localized) {
-                    onSave()
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding(24)
-        .frame(width: 400)
-    }
-}

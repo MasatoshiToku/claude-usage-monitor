@@ -39,21 +39,26 @@ struct ClaudeUsageProvider: TimelineProvider {
     }
 
     private func loadAccounts() -> [AccountData] {
-        let defaults = UserDefaults.standard
-        var accounts: [AccountData] = []
-        for i in 0..<maxAccounts {
-            let name = defaults.string(forKey: "widget.account.\(i).name") ?? "Account \(i + 1)"
-            let sessionPercent = defaults.double(forKey: "widget.account.\(i).sessionPercent")
-            let weeklyPercent = defaults.double(forKey: "widget.account.\(i).weeklyPercent")
-            let isConfigured = defaults.bool(forKey: "widget.account.\(i).isConfigured")
-            accounts.append(AccountData(
-                name: name,
-                sessionPercent: sessionPercent,
-                weeklyPercent: weeklyPercent,
-                isConfigured: isConfigured
-            ))
+        // Read from JSON file in widget's own Documents directory
+        guard let docsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return sampleAccounts()
         }
-        return accounts
+
+        let fileURL = docsURL.appendingPathComponent("widget-data.json")
+
+        guard let data = try? Data(contentsOf: fileURL),
+              let accounts = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return sampleAccounts()
+        }
+
+        return accounts.enumerated().map { index, dict in
+            AccountData(
+                name: dict["name"] as? String ?? "Account \(index + 1)",
+                sessionPercent: dict["sessionPercent"] as? Double ?? 0,
+                weeklyPercent: dict["weeklyPercent"] as? Double ?? 0,
+                isConfigured: dict["isConfigured"] as? Bool ?? false
+            )
+        }
     }
 
     private func sampleAccounts() -> [AccountData] {

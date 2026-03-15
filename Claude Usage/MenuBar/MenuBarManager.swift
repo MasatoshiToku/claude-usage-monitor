@@ -791,8 +791,22 @@ class MenuBarManager: NSObject, ObservableObject {
         refreshAllSelectedProfiles()
     }
 
+    /// Timestamp of the last completed multi-profile refresh (for deduplication)
+    private var lastMultiProfileRefreshTime: Date = .distantPast
+
     /// Refreshes usage data for all profiles selected for multi-profile display
     private func refreshAllSelectedProfiles() {
+        // Deduplication guard: skip if already refreshing or refreshed within 10 seconds
+        guard !isRefreshing else {
+            LoggingService.shared.log("MenuBarManager: Skipping refreshAllSelectedProfiles - already refreshing")
+            return
+        }
+        let timeSinceLastRefresh = Date().timeIntervalSince(lastMultiProfileRefreshTime)
+        if timeSinceLastRefresh < 10.0 {
+            LoggingService.shared.log("MenuBarManager: Skipping refreshAllSelectedProfiles - last refresh was \(String(format: "%.1f", timeSinceLastRefresh))s ago (< 10s)")
+            return
+        }
+
         let selectedProfiles = profileManager.profiles.filter { $0.isSelectedForDisplay && $0.hasUsageCredentials }
 
         guard !selectedProfiles.isEmpty else {
@@ -819,8 +833,12 @@ class MenuBarManager: NSObject, ObservableObject {
                 LoggingService.shared.log("MenuBarManager: Failed to fetch status - [\(appError.code.rawValue)] \(appError.message)")
             }
 
-            // Fetch usage for each selected profile
-            for profile in selectedProfiles {
+            // Fetch usage for each selected profile with staggered delays to avoid 429 rate limits
+            for (index, profile) in selectedProfiles.enumerated() {
+                // Add 3-second delay between profile requests (skip for the first one)
+                if index > 0 {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                }
                 LoggingService.shared.log("MenuBarManager: Fetching usage for profile '\(profile.name)'")
 
                 // Capture previous usage for reset detection
@@ -908,6 +926,7 @@ class MenuBarManager: NSObject, ObservableObject {
                 self.lastRefreshError = nil
                 self.hasCredentialError = false
                 self.lastSuccessfulRefreshTime = Date()
+                self.lastMultiProfileRefreshTime = Date()
                 self.isRefreshing = false
 
                 // Update widget with latest profile data

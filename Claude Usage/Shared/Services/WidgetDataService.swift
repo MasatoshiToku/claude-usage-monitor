@@ -34,6 +34,7 @@ final class WidgetDataService {
                 account["sessionPercent"] = usage.effectiveSessionPercentage / 100.0
                 account["weeklyPercent"] = usage.weeklyPercentage / 100.0
                 account["sessionResetAt"] = usage.sessionResetTime.timeIntervalSince1970
+                account["weeklyResetAt"] = usage.weeklyResetTime.timeIntervalSince1970
                 account["isConfigured"] = true
             } else {
                 account["sessionPercent"] = 0.0

@@ -9,6 +9,7 @@ struct AccountData {
     let sessionPercent: Double
     let weeklyPercent: Double
     let sessionResetAt: Date?
+    let weeklyResetAt: Date?
     let isConfigured: Bool
 }
 
@@ -95,11 +96,16 @@ struct ClaudeUsageProvider: TimelineProvider {
                     guard let ts = dict["sessionResetAt"] as? Double, ts > 0 else { return nil }
                     return Date(timeIntervalSince1970: ts)
                 }()
+                let weeklyReset: Date? = {
+                    guard let ts = dict["weeklyResetAt"] as? Double, ts > 0 else { return nil }
+                    return Date(timeIntervalSince1970: ts)
+                }()
                 return AccountData(
                     name: dict["name"] as? String ?? "Account \(index + 1)",
                     sessionPercent: dict["sessionPercent"] as? Double ?? 0,
                     weeklyPercent: dict["weeklyPercent"] as? Double ?? 0,
                     sessionResetAt: resetAt,
+                    weeklyResetAt: weeklyReset,
                     isConfigured: dict["isConfigured"] as? Bool ?? false
                 )
             }
@@ -111,9 +117,9 @@ struct ClaudeUsageProvider: TimelineProvider {
 
     private func sampleAccounts() -> [AccountData] {
         [
-            AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), isConfigured: true),
-            AccountData(name: "Pro", sessionPercent: 0.78, weeklyPercent: 0.34, sessionResetAt: Date().addingTimeInterval(7200), isConfigured: true),
-            AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, sessionResetAt: nil, isConfigured: false),
+            AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), weeklyResetAt: Date().addingTimeInterval(259200), isConfigured: true),
+            AccountData(name: "Pro", sessionPercent: 0.78, weeklyPercent: 0.34, sessionResetAt: Date().addingTimeInterval(7200), weeklyResetAt: Date().addingTimeInterval(172800), isConfigured: true),
+            AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, sessionResetAt: nil, weeklyResetAt: nil, isConfigured: false),
         ]
     }
 }
@@ -151,6 +157,28 @@ func resetTimeText(_ resetDate: Date?) -> String? {
     } else {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
+        return formatter.string(from: resetDate)
+    }
+}
+
+/// Formats the weekly reset time as relative or date+time
+func weeklyResetTimeText(_ resetDate: Date?) -> String? {
+    guard let resetDate = resetDate else { return nil }
+    let now = Date()
+    if resetDate <= now { return nil }
+    let remaining = resetDate.timeIntervalSince(now)
+    if remaining < 86400 {
+        // Within 24 hours: relative format
+        let hours = Int(remaining / 3600)
+        if hours > 0 {
+            return "\(hours)時間後"
+        }
+        let minutes = Int(remaining / 60)
+        return "\(minutes)分後"
+    } else {
+        // Beyond 24 hours: date + time format
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/dd HH:mm"
         return formatter.string(from: resetDate)
     }
 }
@@ -216,15 +244,27 @@ struct SmallWidgetView: View {
                         ProgressView(value: account.weeklyPercent)
                             .tint(colorForPercent(account.weeklyPercent))
                             .scaleEffect(y: 0.8)
-                        // Session reset time
-                        if let resetText = resetTimeText(account.sessionResetAt) {
-                            HStack(spacing: 2) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 6))
-                                    .foregroundStyle(.secondary)
-                                Text(resetText)
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(.secondary)
+                        // Reset times
+                        HStack(spacing: 6) {
+                            if let resetText = resetTimeText(account.sessionResetAt) {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "arrow.counterclockwise")
+                                        .font(.system(size: 6))
+                                        .foregroundStyle(.secondary)
+                                    Text(resetText)
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            if let wResetText = weeklyResetTimeText(account.weeklyResetAt) {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "calendar")
+                                        .font(.system(size: 6))
+                                        .foregroundStyle(.secondary)
+                                    Text(wResetText)
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -321,6 +361,17 @@ struct MediumWidgetView: View {
                                     .font(.system(size: 7))
                                     .foregroundStyle(.secondary)
                                 Text(resetText)
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        // Weekly reset time
+                        if let wResetText = weeklyResetTimeText(account.weeklyResetAt) {
+                            HStack(spacing: 2) {
+                                Image(systemName: "calendar")
+                                    .font(.system(size: 7))
+                                    .foregroundStyle(.secondary)
+                                Text(wResetText)
                                     .font(.system(size: 8))
                                     .foregroundStyle(.secondary)
                             }
@@ -494,6 +545,19 @@ struct LargeAccountCard: View {
                         Spacer()
                     }
                 }
+
+                // Weekly reset time
+                if let wResetText = weeklyResetTimeText(account.weeklyResetAt) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                        Text("Weekly Reset: \(wResetText)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -582,9 +646,9 @@ struct ClaudeUsageWidgetEntryView: View {
     ClaudeUsageWidget()
 } timeline: {
     AccountUsageEntry(date: Date(), accounts: [
-        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), isConfigured: true),
-        AccountData(name: "Pro", sessionPercent: 0.78, weeklyPercent: 0.34, sessionResetAt: Date().addingTimeInterval(7200), isConfigured: true),
-        AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, sessionResetAt: nil, isConfigured: false),
+        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), weeklyResetAt: Date().addingTimeInterval(172800), isConfigured: true),
+        AccountData(name: "Pro", sessionPercent: 0.78, weeklyPercent: 0.34, sessionResetAt: Date().addingTimeInterval(7200), weeklyResetAt: Date().addingTimeInterval(172800), isConfigured: true),
+        AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, sessionResetAt: nil, weeklyResetAt: nil, isConfigured: false),
     ])
 }
 
@@ -592,9 +656,9 @@ struct ClaudeUsageWidgetEntryView: View {
     ClaudeUsageWidget()
 } timeline: {
     AccountUsageEntry(date: Date(), accounts: [
-        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), isConfigured: true),
-        AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, sessionResetAt: Date().addingTimeInterval(10800), isConfigured: true),
-        AccountData(name: "Personal", sessionPercent: 0.22, weeklyPercent: 0.15, sessionResetAt: Date().addingTimeInterval(900), isConfigured: true),
+        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), weeklyResetAt: Date().addingTimeInterval(172800), isConfigured: true),
+        AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, sessionResetAt: Date().addingTimeInterval(10800), weeklyResetAt: Date().addingTimeInterval(172800), isConfigured: true),
+        AccountData(name: "Personal", sessionPercent: 0.22, weeklyPercent: 0.15, sessionResetAt: Date().addingTimeInterval(900), weeklyResetAt: Date().addingTimeInterval(172800), isConfigured: true),
     ])
 }
 
@@ -602,8 +666,8 @@ struct ClaudeUsageWidgetEntryView: View {
     ClaudeUsageWidget()
 } timeline: {
     AccountUsageEntry(date: Date(), accounts: [
-        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), isConfigured: true),
-        AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, sessionResetAt: Date().addingTimeInterval(10800), isConfigured: true),
-        AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, sessionResetAt: nil, isConfigured: false),
+        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), weeklyResetAt: Date().addingTimeInterval(172800), isConfigured: true),
+        AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, sessionResetAt: Date().addingTimeInterval(10800), weeklyResetAt: Date().addingTimeInterval(172800), isConfigured: true),
+        AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, sessionResetAt: nil, weeklyResetAt: nil, isConfigured: false),
     ])
 }

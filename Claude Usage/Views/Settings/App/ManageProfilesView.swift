@@ -306,14 +306,54 @@ struct ProfileRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 if isEditing {
-                    TextField("Profile Name", text: $editedName, onCommit: {
-                        saveProfileName()
-                    })
-                    .textFieldStyle(.roundedBorder)
+                    HStack(spacing: 6) {
+                        TextField("Profile Name", text: $editedName, onCommit: {
+                            saveProfileName()
+                        })
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 200)
+
+                        // Save Button
+                        Button(action: {
+                            saveProfileName()
+                        }) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12))
+                                .foregroundColor(.green)
+                        }
+                        .buttonStyle(.plain)
+
+                        // Cancel Button
+                        Button(action: {
+                            isEditing = false
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12))
+                                .foregroundColor(.red)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 } else {
                     HStack(spacing: 8) {
+                        // Tappable profile name to enter edit mode
                         Text(profile.name)
                             .font(.system(size: 14, weight: .medium))
+                            .onTapGesture {
+                                editedName = profile.name
+                                isEditing = true
+                            }
+
+                        // Always-visible pencil icon next to the name
+                        Button(action: {
+                            editedName = profile.name
+                            isEditing = true
+                        }) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("profiles.rename".localized)
 
                         if profileManager.activeProfile?.id == profile.id {
                             Text("profiles.active_badge".localized)
@@ -334,55 +374,19 @@ struct ProfileRow: View {
 
             Spacer()
 
-            // Actions
-            HStack(spacing: 8) {
-                if !isEditing {
-                    // Rename Button
+            // Actions (activate only — rename moved inline next to name)
+            if !isEditing {
+                if profileManager.activeProfile?.id != profile.id {
                     Button(action: {
-                        editedName = profile.name
-                        isEditing = true
-                    }) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 12))
-                    }
-                    .buttonStyle(.plain)
-                    .help("profiles.rename".localized)
-
-                    // Activate Button (if not active)
-                    if profileManager.activeProfile?.id != profile.id {
-                        Button(action: {
-                            Task {
-                                await profileManager.activateProfile(profile.id)
-                            }
-                        }) {
-                            Image(systemName: "checkmark.circle")
-                                .font(.system(size: 12))
+                        Task {
+                            await profileManager.activateProfile(profile.id)
                         }
-                        .buttonStyle(.plain)
-                        .help("profiles.activate".localized)
-                    }
-
-
-                } else {
-                    // Save Button
-                    Button(action: {
-                        saveProfileName()
                     }) {
-                        Image(systemName: "checkmark")
+                        Image(systemName: "checkmark.circle")
                             .font(.system(size: 12))
-                            .foregroundColor(.green)
                     }
                     .buttonStyle(.plain)
-
-                    // Cancel Button
-                    Button(action: {
-                        isEditing = false
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12))
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.plain)
+                    .help("profiles.activate".localized)
                 }
             }
         }
@@ -398,7 +402,7 @@ struct ProfileRow: View {
 
         parts.append("\("profiles.created".localized) \(profile.createdAt.formatted(date: .abbreviated, time: .omitted))")
 
-        return parts.joined(separator: " • ")
+        return parts.joined(separator: " \u{2022} ")
     }
 
     private func saveProfileName() {
@@ -412,5 +416,3 @@ struct ProfileRow: View {
 
 
 }
-
-

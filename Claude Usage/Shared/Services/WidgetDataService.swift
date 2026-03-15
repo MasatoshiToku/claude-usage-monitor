@@ -33,6 +33,7 @@ final class WidgetDataService {
                 // ClaudeUsage percentages are 0-100 scale; widget expects 0-1 scale
                 account["sessionPercent"] = usage.effectiveSessionPercentage / 100.0
                 account["weeklyPercent"] = usage.weeklyPercentage / 100.0
+                account["sessionResetAt"] = usage.sessionResetTime.timeIntervalSince1970
                 account["isConfigured"] = true
             } else {
                 account["sessionPercent"] = 0.0

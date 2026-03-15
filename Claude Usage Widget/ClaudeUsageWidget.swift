@@ -8,6 +8,7 @@ struct AccountData {
     let name: String
     let sessionPercent: Double
     let weeklyPercent: Double
+    let sessionResetAt: Date?
     let isConfigured: Bool
 }
 
@@ -90,10 +91,15 @@ struct ClaudeUsageProvider: TimelineProvider {
             logger.info("Widget parsed \(accounts.count) accounts from JSON")
 
             return accounts.enumerated().map { index, dict in
-                AccountData(
+                let resetAt: Date? = {
+                    guard let ts = dict["sessionResetAt"] as? Double, ts > 0 else { return nil }
+                    return Date(timeIntervalSince1970: ts)
+                }()
+                return AccountData(
                     name: dict["name"] as? String ?? "Account \(index + 1)",
                     sessionPercent: dict["sessionPercent"] as? Double ?? 0,
                     weeklyPercent: dict["weeklyPercent"] as? Double ?? 0,
+                    sessionResetAt: resetAt,
                     isConfigured: dict["isConfigured"] as? Bool ?? false
                 )
             }
@@ -105,9 +111,9 @@ struct ClaudeUsageProvider: TimelineProvider {
 
     private func sampleAccounts() -> [AccountData] {
         [
-            AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, isConfigured: true),
-            AccountData(name: "Pro", sessionPercent: 0.78, weeklyPercent: 0.34, isConfigured: true),
-            AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, isConfigured: false),
+            AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), isConfigured: true),
+            AccountData(name: "Pro", sessionPercent: 0.78, weeklyPercent: 0.34, sessionResetAt: Date().addingTimeInterval(7200), isConfigured: true),
+            AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, sessionResetAt: nil, isConfigured: false),
         ]
     }
 }
@@ -131,6 +137,22 @@ func colorForPercent(_ percent: Double) -> Color {
 /// Subtle background tint for account sections based on usage level
 func backgroundTintForPercent(_ percent: Double) -> Color {
     colorForPercent(percent).opacity(0.07)
+}
+
+/// Formats the session reset time as relative or absolute
+func resetTimeText(_ resetDate: Date?) -> String? {
+    guard let resetDate = resetDate else { return nil }
+    let now = Date()
+    if resetDate <= now { return nil }
+    let remaining = resetDate.timeIntervalSince(now)
+    if remaining < 3600 {
+        let minutes = Int(remaining / 60)
+        return "\(minutes)\u{5206}\u{5F8C}"
+    } else {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: resetDate)
+    }
 }
 
 /// Status dot indicator for account name
@@ -194,6 +216,17 @@ struct SmallWidgetView: View {
                         ProgressView(value: account.weeklyPercent)
                             .tint(colorForPercent(account.weeklyPercent))
                             .scaleEffect(y: 0.8)
+                        // Session reset time
+                        if let resetText = resetTimeText(account.sessionResetAt) {
+                            HStack(spacing: 2) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 6))
+                                    .foregroundStyle(.secondary)
+                                Text(resetText)
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                     // Subtle background tint based on higher usage level
                     .padding(.horizontal, 4)
@@ -281,6 +314,17 @@ struct MediumWidgetView: View {
                         Text("Week: \(Int(account.weeklyPercent * 100))%")
                             .font(.system(size: 9))
                             .foregroundStyle(colorForPercent(account.weeklyPercent))
+                        // Session reset time
+                        if let resetText = resetTimeText(account.sessionResetAt) {
+                            HStack(spacing: 2) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 7))
+                                    .foregroundStyle(.secondary)
+                                Text(resetText)
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     // Subtle background tint based on session usage level
@@ -437,6 +481,19 @@ struct LargeAccountCard: View {
                     ProgressView(value: account.weeklyPercent)
                         .tint(colorForPercent(account.weeklyPercent))
                 }
+
+                // Session reset time
+                if let resetText = resetTimeText(account.sessionResetAt) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                        Text("Reset: \(resetText)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -525,9 +582,9 @@ struct ClaudeUsageWidgetEntryView: View {
     ClaudeUsageWidget()
 } timeline: {
     AccountUsageEntry(date: Date(), accounts: [
-        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, isConfigured: true),
-        AccountData(name: "Pro", sessionPercent: 0.78, weeklyPercent: 0.34, isConfigured: true),
-        AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, isConfigured: false),
+        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), isConfigured: true),
+        AccountData(name: "Pro", sessionPercent: 0.78, weeklyPercent: 0.34, sessionResetAt: Date().addingTimeInterval(7200), isConfigured: true),
+        AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, sessionResetAt: nil, isConfigured: false),
     ])
 }
 
@@ -535,9 +592,9 @@ struct ClaudeUsageWidgetEntryView: View {
     ClaudeUsageWidget()
 } timeline: {
     AccountUsageEntry(date: Date(), accounts: [
-        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, isConfigured: true),
-        AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, isConfigured: true),
-        AccountData(name: "Personal", sessionPercent: 0.22, weeklyPercent: 0.15, isConfigured: true),
+        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), isConfigured: true),
+        AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, sessionResetAt: Date().addingTimeInterval(10800), isConfigured: true),
+        AccountData(name: "Personal", sessionPercent: 0.22, weeklyPercent: 0.15, sessionResetAt: Date().addingTimeInterval(900), isConfigured: true),
     ])
 }
 
@@ -545,8 +602,8 @@ struct ClaudeUsageWidgetEntryView: View {
     ClaudeUsageWidget()
 } timeline: {
     AccountUsageEntry(date: Date(), accounts: [
-        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, isConfigured: true),
-        AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, isConfigured: true),
-        AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, isConfigured: false),
+        AccountData(name: "Team", sessionPercent: 0.45, weeklyPercent: 0.62, sessionResetAt: Date().addingTimeInterval(2700), isConfigured: true),
+        AccountData(name: "Pro", sessionPercent: 0.85, weeklyPercent: 0.91, sessionResetAt: Date().addingTimeInterval(10800), isConfigured: true),
+        AccountData(name: "Personal", sessionPercent: 0.0, weeklyPercent: 0.0, sessionResetAt: nil, isConfigured: false),
     ])
 }

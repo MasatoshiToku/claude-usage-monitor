@@ -73,7 +73,7 @@ class ClaudeAPIService: APIServiceProtocol {
     /// Gets the best available authentication method with fallback support
     /// Priority: 1) claude.ai session → 2) saved CLI OAuth → 3) system Keychain CLI OAuth
     /// Note: Console API session is NOT used as fallback (it only provides billing data, not usage)
-    private func getAuthentication() throws -> AuthenticationType {
+    private func getAuthentication() async throws -> AuthenticationType {
         guard let activeProfile = ProfileManager.shared.activeProfile else {
             LoggingService.shared.logError("ClaudeAPIService.getAuthentication: No active profile")
             throw AppError.sessionKeyNotFound()
@@ -97,7 +97,19 @@ class ClaudeAPIService: APIServiceProtocol {
                 LoggingService.shared.log("ClaudeAPIService: Falling back to saved CLI OAuth token")
                 return .cliOAuth(accessToken)
             } else {
-                LoggingService.shared.log("ClaudeAPIService: Saved CLI OAuth token is expired or invalid")
+                // Token is expired or invalid — attempt refresh before falling back
+                LoggingService.shared.log("ClaudeAPIService: Saved CLI OAuth token is expired or invalid, attempting refresh")
+                do {
+                    let refreshedJSON = try await ClaudeCodeSyncService.shared.refreshAccessToken(from: cliJSON)
+                    if let newToken = ClaudeCodeSyncService.shared.extractAccessToken(from: refreshedJSON) {
+                        // Save refreshed credentials to profile
+                        await Self.saveRefreshedCredentials(refreshedJSON, for: activeProfile.id)
+                        LoggingService.shared.log("ClaudeAPIService: OAuth token refreshed successfully, using new token")
+                        return .cliOAuth(newToken)
+                    }
+                } catch {
+                    LoggingService.shared.logError("ClaudeAPIService: OAuth token refresh failed: \(error.localizedDescription)")
+                }
             }
         }
 
@@ -108,7 +120,19 @@ class ClaudeAPIService: APIServiceProtocol {
 
                 // Validate token is not expired
                 if ClaudeCodeSyncService.shared.isTokenExpired(systemCredentials) {
-                    LoggingService.shared.log("ClaudeAPIService: System Keychain CLI token is expired")
+                    // System keychain token also expired — attempt refresh
+                    LoggingService.shared.log("ClaudeAPIService: System Keychain CLI token is expired, attempting refresh")
+                    do {
+                        let refreshedJSON = try await ClaudeCodeSyncService.shared.refreshAccessToken(from: systemCredentials)
+                        if let newToken = ClaudeCodeSyncService.shared.extractAccessToken(from: refreshedJSON) {
+                            // Save refreshed credentials to profile
+                            await Self.saveRefreshedCredentials(refreshedJSON, for: activeProfile.id)
+                            LoggingService.shared.log("ClaudeAPIService: System Keychain token refreshed successfully")
+                            return .cliOAuth(newToken)
+                        }
+                    } catch {
+                        LoggingService.shared.logError("ClaudeAPIService: System Keychain token refresh failed: \(error.localizedDescription)")
+                    }
                 } else if let accessToken = ClaudeCodeSyncService.shared.extractAccessToken(from: systemCredentials) {
                     LoggingService.shared.log("ClaudeAPIService: Using CLI credentials from system Keychain")
                     return .cliOAuth(accessToken)
@@ -124,6 +148,27 @@ class ClaudeAPIService: APIServiceProtocol {
 
         LoggingService.shared.logError("ClaudeAPIService.getAuthentication: No valid credentials for usage data")
         throw AppError.sessionKeyNotFound()
+    }
+
+    /// Saves refreshed OAuth credentials to the profile (runs on MainActor for ProfileManager access)
+    @MainActor
+    private static func saveRefreshedCredentials(_ newJSON: String, for profileId: UUID) {
+        var profiles = ProfileStore.shared.loadProfiles()
+        guard let index = profiles.firstIndex(where: { $0.id == profileId }) else {
+            LoggingService.shared.logError("ClaudeAPIService: Could not find profile \(profileId) to save refreshed credentials")
+            return
+        }
+        profiles[index].cliCredentialsJSON = newJSON
+        ProfileStore.shared.saveProfiles(profiles)
+
+        // Update in-memory state
+        if ProfileManager.shared.activeProfile?.id == profileId {
+            ProfileManager.shared.activeProfile?.cliCredentialsJSON = newJSON
+            if let idx = ProfileManager.shared.profiles.firstIndex(where: { $0.id == profileId }) {
+                ProfileManager.shared.profiles[idx].cliCredentialsJSON = newJSON
+            }
+        }
+        LoggingService.shared.log("ClaudeAPIService: Saved refreshed OAuth credentials to profile")
     }
 
     /// Builds an authenticated request with the appropriate headers for the auth type
@@ -496,7 +541,7 @@ class ClaudeAPIService: APIServiceProtocol {
 
     /// Fetches real usage data from Claude's API
     func fetchUsageData() async throws -> ClaudeUsage {
-        let auth = try getAuthentication()
+        let auth = try await getAuthentication()
 
         switch auth {
         case .claudeAISession(let sessionKey):

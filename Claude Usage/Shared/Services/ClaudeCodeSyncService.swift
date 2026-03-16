@@ -384,6 +384,73 @@ class ClaudeCodeSyncService {
         return Date() > expiryDate
     }
 
+
+    // MARK: - Token Refresh
+
+    /// OAuth token refresh: exchanges a refresh token for a new access token
+    /// Returns the updated credentials JSON string with new access/refresh tokens and expiry
+    func refreshAccessToken(from credentialsJSON: String) async throws -> String {
+        guard let data = credentialsJSON.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let oauth = json["claudeAiOauth"] as? [String: Any],
+              let refreshToken = oauth["refreshToken"] as? String else {
+            throw ClaudeCodeError.tokenRefreshFailed("No refresh token found in credentials")
+        }
+
+        LoggingService.shared.log("ClaudeCodeSyncService: Attempting OAuth token refresh")
+
+        // Build the token refresh request
+        guard let url = URL(string: Constants.APIEndpoints.oauthTokenURL) else {
+            throw ClaudeCodeError.tokenRefreshFailed("Invalid OAuth token URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+        let bodyString = "grant_type=refresh_token&refresh_token=\(refreshToken)&client_id=\(Constants.OAuth.clientId)"
+        request.httpBody = bodyString.data(using: .utf8)
+
+        // Perform the request
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ClaudeCodeError.tokenRefreshFailed("Invalid response from OAuth server")
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let body = String(data: responseData, encoding: .utf8) ?? "unknown"
+            LoggingService.shared.logError("ClaudeCodeSyncService: Token refresh failed with status \(httpResponse.statusCode): \(body)")
+            throw ClaudeCodeError.tokenRefreshFailed("HTTP \(httpResponse.statusCode): \(body)")
+        }
+
+        // Parse the response
+        guard let responseJSON = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+              let newAccessToken = responseJSON["access_token"] as? String,
+              let newRefreshToken = responseJSON["refresh_token"] as? String,
+              let expiresIn = responseJSON["expires_in"] as? Int else {
+            throw ClaudeCodeError.tokenRefreshFailed("Invalid response format from OAuth server")
+        }
+
+        // Calculate new expiresAt (epoch milliseconds)
+        let newExpiresAt = Int64(Date().timeIntervalSince1970 * 1000) + Int64(expiresIn) * 1000
+
+        // Build updated credentials JSON (immutable approach: reconstruct from parsed data)
+        var updatedJSON = json
+        var updatedOAuth = oauth
+        updatedOAuth["accessToken"] = newAccessToken
+        updatedOAuth["refreshToken"] = newRefreshToken
+        updatedOAuth["expiresAt"] = newExpiresAt
+        updatedJSON["claudeAiOauth"] = updatedOAuth
+
+        guard let updatedData = try? JSONSerialization.data(withJSONObject: updatedJSON),
+              let updatedString = String(data: updatedData, encoding: .utf8) else {
+            throw ClaudeCodeError.tokenRefreshFailed("Failed to serialize updated credentials")
+        }
+
+        LoggingService.shared.log("ClaudeCodeSyncService: OAuth token refreshed successfully (expires in \(expiresIn)s)")
+        return updatedString
+    }
     // MARK: - Auto Re-sync Before Switching
 
     /// Re-syncs credentials from system Keychain before profile switching
@@ -427,6 +494,7 @@ enum ClaudeCodeError: LocalizedError {
     case keychainReadFailed(status: OSStatus)
     case keychainWriteFailed(status: OSStatus)
     case noProfileCredentials
+    case tokenRefreshFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -440,6 +508,8 @@ enum ClaudeCodeError: LocalizedError {
             return "Failed to write credentials to system Keychain (status: \(status))."
         case .noProfileCredentials:
             return "This profile has no synced CLI account."
+        case .tokenRefreshFailed(let reason):
+            return "Failed to refresh OAuth token: \(reason)"
         }
     }
 }
